@@ -1,0 +1,113 @@
+---
+title: "Prediction Assignment Writeup"
+author: "Sumit Mittal"
+date: "22/02/2022"
+output: html_document
+---
+
+
+```{r}
+setwd("/Users/sumitmittal/Downloads")
+#read.csv(file_dest_training, na.strings=c("NA",""), header=TRUE)
+#ExoData=read.csv(file="pml-training.csv",head=TRUE,sep=",", stringsAsFactors=FALSE)
+ExoData=read.csv("pml-training.csv", na.strings=c("NA",""), header=TRUE)
+nrow(ExoData)
+#str(ExoData)
+dim(ExoData)
+```
+
+#FEATURES
+
+```{r}
+b=sapply(ExoData, function(x) sum(is.na(x)))
+FullData=subset(ExoData,select=c(which(!b>0)), stringsAsFactors=FALSE)
+#str(FullData)
+dim(FullData)
+```
+
+
+```{r}
+smartData=FullData
+smartData=smartData[,colSums(smartData != 0) != 0] 
+dim(smartData)
+s=sapply(smartData, function(x) sum(is.na(x)))
+#str(smartData)
+```
+
+#Random Forest Model
+
+```{r}
+library(caret)
+library(mlbench)
+set.seed(3)
+```
+
+
+```{r}
+tData=smartData
+tData$cvtd_timestamp=NULL #with these in, there was a factor level mismatch with final validation set
+tData$new_window=NULL #  final validation set
+dim(tData)
+trainIdx=createDataPartition(tData$classe, p = .75, list=FALSE)
+trainD=tData[trainIdx,]
+testD=tData[-trainIdx,]
+x <- trainD[,-58]
+y <- trainD[,58]
+```
+
+```{r}
+library(parallel)
+library(doParallel)
+cluster <- makeCluster(detectCores() - 1) # convention to leave 1 core for OS
+registerDoParallel(cluster)
+```
+
+#CROSS VALIDATION
+
+```{r}
+fitControl <- trainControl(method = "cv",
+                           number = 10,
+                           allowParallel = TRUE)
+```
+
+
+```{r}
+fit <- train(x,y, method="rf",data=trainD,trControl = fitControl)
+plot(fit)
+```
+
+
+
+```{r}
+setwd("/Users/sumitmittal/Downloads")
+vData=read.csv("pml-testing.csv", na.strings=c("NA",""), header=TRUE)
+b=sapply(vData, function(x) sum(is.na(x)))
+fvData=subset(vData,select=c(which(!b>0)), stringsAsFactors=FALSE)
+#str(vData)
+#dim(vData)
+svData=fvData
+svData=svData[,colSums(svData != 0) != 0] 
+dim(svData)
+s=sapply(svData, function(x) sum(is.na(x)))
+#str(svData)
+```
+
+
+```{r}
+rf.pred=predict(fit,testD[,-58])
+confusionMat=table(rf.pred,testD[,58])
+confusionMat
+```
+
+
+
+```{r}
+validationData=svData
+validationData$cvtd_timestamp=NULL
+validationData$new_window=NULL
+#nrow(validationData)
+#str(validationData)
+#dim(validationData)
+validation.pred=predict(fit, validationData)
+validation.pred
+```
